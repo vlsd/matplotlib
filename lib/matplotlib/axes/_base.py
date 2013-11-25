@@ -698,8 +698,6 @@ class _AxesBase(martist.Artist):
                                               self.figure.dpi_scale_trans),
                 "center", "left")
 
-
-
     def _update_transScale(self):
         self.transScale.set(
             mtransforms.blended_transform_factory(
@@ -897,7 +895,8 @@ class _AxesBase(martist.Artist):
         self.containers = []
 
         self.grid(self._gridOn, which=rcParams['axes.grid.which'])
-        props = font_manager.FontProperties(size=rcParams['axes.titlesize'])
+        props = font_manager.FontProperties(size=rcParams['axes.titlesize'],
+                                        weight=rcParams['axes.titleweight'])
 
         self.titleOffsetTrans = mtransforms.ScaledTranslation(
             0.0, 5.0 / 72.0, self.figure.dpi_scale_trans)
@@ -1090,7 +1089,8 @@ class _AxesBase(martist.Artist):
           =====  ============
 
         """
-        if anchor in list(six.iterkeys(mtransforms.Bbox.coefs)) or len(anchor) == 2:
+        if (anchor in list(six.iterkeys(mtransforms.Bbox.coefs)) or
+                len(anchor) == 2):
             self._anchor = anchor
         else:
             raise ValueError('argument must be among %s' %
@@ -1142,7 +1142,7 @@ class _AxesBase(martist.Artist):
                 aspect_scale_mode = "log"
             elif ((xscale == "linear" and yscale == "log") or
                   (xscale == "log" and yscale == "linear")):
-                if aspect is not "auto":
+                if aspect != "auto":
                     warnings.warn(
                         'aspect is not supported for Axes with xscale=%s, '
                         'yscale=%s' % (xscale, yscale))
@@ -1593,9 +1593,9 @@ class _AxesBase(martist.Artist):
 
     def relim(self, visible_only=False):
         """
-        Recompute the data limits based on current artists. If you want to exclude
-        invisible artists from the calculation, set
-        `visible_only=True`
+        Recompute the data limits based on current artists. If you want to
+        exclude invisible artists from the calculation, set
+        ``visible_only=True``
 
         At present, :class:`~matplotlib.collections.Collection`
         instances are not supported.
@@ -2503,7 +2503,8 @@ class _AxesBase(martist.Artist):
         if 'xmax' in kw:
             right = kw.pop('xmax')
         if kw:
-            raise ValueError("unrecognized kwargs: %s" % list(six.iterkeys(kw)))
+            raise ValueError("unrecognized kwargs: %s" %
+                             list(six.iterkeys(kw)))
 
         if right is None and iterable(left):
             left, right = left
@@ -2732,7 +2733,8 @@ class _AxesBase(martist.Artist):
         if 'ymax' in kw:
             top = kw.pop('ymax')
         if kw:
-            raise ValueError("unrecognized kwargs: %s" % list(six.iterkeys(kw)))
+            raise ValueError("unrecognized kwargs: %s" %
+                             list(six.iterkeys(kw)))
 
         if top is None and iterable(bottom):
             bottom, top = bottom
@@ -3238,13 +3240,13 @@ class _AxesBase(martist.Artist):
             For those who are 'picking' artists while using twinx, pick
             events are only called for the artists in the top-most axes.
         """
-
-        ax2 = self._make_twin_axes(sharex=self, frameon=False)
+        ax2 = self._make_twin_axes(sharex=self)
         ax2.yaxis.tick_right()
         ax2.yaxis.set_label_position('right')
         ax2.yaxis.set_offset_position('right')
         self.yaxis.tick_left()
         ax2.xaxis.set_visible(False)
+        ax2.patch.set_visible(False)
         return ax2
 
     def twiny(self):
@@ -3263,11 +3265,12 @@ class _AxesBase(martist.Artist):
             events are only called for the artists in the top-most axes.
         """
 
-        ax2 = self._make_twin_axes(sharey=self, frameon=False)
+        ax2 = self._make_twin_axes(sharey=self)
         ax2.xaxis.tick_top()
         ax2.xaxis.set_label_position('top')
         self.xaxis.tick_bottom()
         ax2.yaxis.set_visible(False)
+        ax2.patch.set_visible(False)
         return ax2
 
     def get_shared_x_axes(self):

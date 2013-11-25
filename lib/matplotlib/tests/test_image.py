@@ -151,7 +151,8 @@ def test_imsave_color_alpha():
     # Wherever alpha values were rounded down to 0, the rgb values all get set
     # to 0 during imsave (this is reasonable behaviour).
     # Recreate that here:
-    data[data[:, :, 3] == 0] = 0
+    for j in range(3):
+        data[data[:, :, 3] == 0, j] = 1
 
     assert_array_equal(data, arr_buf)
 
@@ -289,6 +290,14 @@ def test_rasterize_dpi():
 
     axes[2].plot([0,1],[0,1], linewidth=20.)
     axes[2].set(xlim = (0,1), ylim = (-1, 2))
+    
+    # Low-dpi PDF rasterization errors prevent proper image comparison tests.
+    # Hide detailed structures like the axes spines.
+    for ax in axes:
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for spine in ax.spines.values():
+            spine.set_visible(False)
 
     rcParams['savefig.dpi'] = 10
 

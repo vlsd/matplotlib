@@ -115,11 +115,16 @@ except ImportError:
 def compare_versions(a, b):
     "return True if a is greater than or equal to b"
     if a:
+        if six.PY3:
+            if isinstance(a, bytes):
+                a = a.decode('ascii')
+            if isinstance(b, bytes):
+                b = b.decode('ascii')
         a = distutils.version.LooseVersion(a)
         b = distutils.version.LooseVersion(b)
-        if a>=b: return True
-        else: return False
-    else: return False
+        return a >= b
+    else:
+        return False
 
 try:
     import pyparsing
@@ -150,7 +155,16 @@ else:
             return self
         pyparsing.Forward.__ilshift__ = _forward_ilshift
 
-import os, re, shutil, warnings
+try:
+    from urllib.request import urlopen
+except ImportError:
+    from urllib2 import urlopen
+
+import os
+import re
+import tempfile
+import warnings
+import contextlib
 import distutils.sysconfig
 
 # cbook must import matplotlib only within function
@@ -169,11 +183,8 @@ if not hasattr(sys, 'argv'):  # for modpython
     sys.argv = ['modpython']
 
 
-import sys, os, tempfile
-
 from matplotlib.rcsetup import (defaultParams,
-                                validate_backend,
-                                validate_toolbar)
+                                validate_backend)
 
 major, minor1, minor2, s, tmp = sys.version_info
 _python24 = (major == 2 and minor1 >= 4) or major >= 3
@@ -238,7 +249,7 @@ class Verbose:
     # --verbose-silent or --verbose-helpful
     _commandLineVerbose = None
 
-    for arg in sys.argv[1:]:
+    for arg in map(six.u, sys.argv[1:]):
         if not arg.startswith('--verbose-'):
             continue
         level_str = arg[10:]
@@ -330,23 +341,22 @@ def checkdep_dvipng():
         return None
 
 def checkdep_ghostscript():
-    try:
-        if sys.platform == 'win32':
-            gs_execs = ['gswin32c', 'gswin64c', 'gs']
-        else:
-            gs_execs = ['gs']
-        for gs_exec in gs_execs:
+    if sys.platform == 'win32':
+        gs_execs = ['gswin32c', 'gswin64c', 'gs']
+    else:
+        gs_execs = ['gs']
+    for gs_exec in gs_execs:
+        try:
             s = subprocess.Popen(
                 [gs_exec, '--version'], stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
             stdout, stderr = s.communicate()
             if s.returncode == 0:
-                v = stdout[:-1]
+                v = stdout[:-1].decode('ascii')
                 return gs_exec, v
-
-        return None, None
-    except (IndexError, ValueError, OSError):
-        return None, None
+        except (IndexError, ValueError, OSError):
+            pass
+    return None, None
 
 def checkdep_tex():
     try:
@@ -523,7 +533,11 @@ def _get_xdg_config_dir():
     base directory spec
     <http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html>`_.
     """
-    return os.environ.get('XDG_CONFIG_HOME', os.path.join(get_home(), '.config'))
+    home = get_home()
+    if home is None:
+        return None
+    else:
+        return os.environ.get('XDG_CONFIG_HOME', os.path.join(home, '.config'))
 
 
 def _get_xdg_cache_dir():
@@ -532,7 +546,11 @@ def _get_xdg_cache_dir():
     base directory spec
     <http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html>`_.
     """
-    return os.environ.get('XDG_CACHE_HOME', os.path.join(get_home(), '.cache'))
+    home = get_home()
+    if home is None:
+        return None
+    else:
+        return os.environ.get('XDG_CACHE_HOME', os.path.join(home, '.cache'))
 
 
 def _get_config_or_cache_dir(xdg_base):
@@ -548,22 +566,27 @@ def _get_config_or_cache_dir(xdg_base):
             return _create_tmp_config_dir()
         return configdir
 
+    p = None
     h = get_home()
-    p = os.path.join(h, '.matplotlib')
-    if (sys.platform.startswith('linux') and
-        not os.path.exists(p)):
-        p = os.path.join(xdg_base, 'matplotlib')
+    if h is not None:
+        p = os.path.join(h, '.matplotlib')
+        if (sys.platform.startswith('linux') and
+            xdg_base is not None):
+            p = os.path.join(xdg_base, 'matplotlib')
 
-    if os.path.exists(p):
-        if not _is_writable_dir(p):
-            return _create_tmp_config_dir()
-    else:
-        try:
-            mkdirs(p)
-        except OSError:
-            return _create_tmp_config_dir()
+    if p is not None:
+        if os.path.exists(p):
+            if _is_writable_dir(p):
+                return p
+        else:
+            try:
+                mkdirs(p)
+            except OSError:
+                pass
+            else:
+                return p
 
-    return p
+    return _create_tmp_config_dir()
 
 
 def _get_configdir():
@@ -719,9 +742,11 @@ def matplotlib_fname():
     if configdir is not None:
         fname = os.path.join(configdir, 'matplotlibrc')
         if os.path.exists(fname):
+            home = get_home()
             if (sys.platform.startswith('linux') and
-                fname == os.path.join(
-                    get_home(), '.matplotlib', 'matplotlibrc')):
+                home is not None and
+                os.path.exists(os.path.join(
+                    home, '.matplotlib', 'matplotlibrc'))):
                 warnings.warn(
                     "Found matplotlib configuration in ~/.matplotlib/. "
                     "To conform with the XDG base directory standard, "
@@ -730,6 +755,8 @@ def matplotlib_fname():
                     "Please move your configuration there to ensure that "
                     "matplotlib will continue to find it in the future." %
                     _get_xdg_config_dir())
+                return os.path.join(
+                    home, '.matplotlib', 'matplotlibrc')
             return fname
 
     path = get_data_path()  # guaranteed to exist or raise
@@ -857,21 +884,51 @@ def rc_params(fail_on_error=False):
     return rc_params_from_file(fname, fail_on_error)
 
 
-def rc_params_from_file(fname, fail_on_error=False):
-    """Return a :class:`matplotlib.RcParams` instance from the
-    contents of the given filename.
+URL_REGEX = re.compile(r'http://|https://|ftp://|file://|file:\\')
+
+
+def is_url(filename):
+    """Return True if string is an http, ftp, or file URL path."""
+    return URL_REGEX.match(filename) is not None
+
+
+def _url_lines(f):
+    # Compatibility for urlopen in python 3, which yields bytes.
+    for line in f:
+        yield line.decode('utf8')
+
+
+@contextlib.contextmanager
+def _open_file_or_url(fname):
+    if is_url(fname):
+        f = urlopen(fname)
+        yield _url_lines(f)
+        f.close()
+    else:
+        with open(fname) as f:
+            yield f
+
+
+_error_details_fmt = 'line #%d\n\t"%s"\n\tin file "%s"'
+
+
+def _rc_params_in_file(fname, fail_on_error=False):
+    """Return :class:`matplotlib.RcParams` from the contents of the given file.
+
+    Unlike `rc_params_from_file`, the configuration class only contains the
+    parameters specified in the file (i.e. default values are not filled in).
     """
     cnt = 0
     rc_temp = {}
-    with open(fname) as fd:
+    with _open_file_or_url(fname) as fd:
         for line in fd:
             cnt += 1
             strippedline = line.split('#', 1)[0].strip()
             if not strippedline: continue
             tup = strippedline.split(':', 1)
             if len(tup) != 2:
-                warnings.warn('Illegal line #%d\n\t%s\n\tin file "%s"' % \
-                              (cnt, line, fname))
+                error_details = _error_details_fmt % (cnt, line, fname)
+                warnings.warn('Illegal %s' % error_details)
                 continue
             key, val = tup
             key = key.strip()
@@ -881,34 +938,35 @@ def rc_params_from_file(fname, fail_on_error=False):
                               (fname, cnt))
             rc_temp[key] = (val, line, cnt)
 
-    ret = RcParams([(key, default) for key, (default, _) in \
-                    six.iteritems(defaultParams)])
+    config = RcParams()
 
     for key in ('verbose.level', 'verbose.fileo'):
         if key in rc_temp:
             val, line, cnt = rc_temp.pop(key)
             if fail_on_error:
-                ret[key] = val # try to convert to proper type or raise
+                config[key] = val # try to convert to proper type or raise
             else:
-                try: ret[key] = val # try to convert to proper type or skip
+                try:
+                    config[key] = val # try to convert to proper type or skip
                 except Exception as msg:
-                    warnings.warn('Bad val "%s" on line #%d\n\t"%s"\n\tin file \
-"%s"\n\t%s' % (val, cnt, line, fname, msg))
-
-    verbose.set_level(ret['verbose.level'])
-    verbose.set_fileo(ret['verbose.fileo'])
+                    error_details = _error_details_fmt % (cnt, line, fname)
+                    warnings.warn('Bad val "%s" on %s\n\t%s' %
+                                  (val, error_details, msg))
 
     for key, (val, line, cnt) in six.iteritems(rc_temp):
         if key in defaultParams:
             if fail_on_error:
-                ret[key] = val # try to convert to proper type or raise
+                config[key] = val # try to convert to proper type or raise
             else:
-                try: ret[key] = val # try to convert to proper type or skip
+                try:
+                    config[key] = val # try to convert to proper type or skip
                 except Exception as msg:
-                    warnings.warn('Bad val "%s" on line #%d\n\t"%s"\n\tin file \
-"%s"\n\t%s' % (val, cnt, line, fname, msg))
+                    error_details = _error_details_fmt % (cnt, line, fname)
+                    warnings.warn('Bad val "%s" on %s\n\t%s' %
+                                  (val, error_details, msg))
         elif key in _deprecated_ignore_map:
-            warnings.warn('%s is deprecated. Update your matplotlibrc to use %s instead.'% (key, _deprecated_ignore_map[key]))
+            warnings.warn('%s is deprecated. Update your matplotlibrc to use '
+                          '%s instead.'% (key, _deprecated_ignore_map[key]))
 
         else:
             print("""
@@ -918,21 +976,50 @@ You probably need to get an updated matplotlibrc file from
 http://matplotlib.sf.net/_static/matplotlibrc or from the matplotlib source
 distribution""" % (key, cnt, fname), file=sys.stderr)
 
-    if ret['datapath'] is None:
-        ret['datapath'] = get_data_path()
+    return config
 
-    if not ret['text.latex.preamble'] == ['']:
+
+def rc_params_from_file(fname, fail_on_error=False, use_default_template=True):
+    """Return :class:`matplotlib.RcParams` from the contents of the given file.
+
+    Parameters
+    ----------
+    fname : str
+        Name of file parsed for matplotlib settings.
+    fail_on_error : bool
+        If True, raise an error when the parser fails to convert a parameter.
+    use_default_template : bool
+        If True, initialize with default parameters before updating with those
+        in the given file. If False, the configuration class only contains the
+        parameters specified in the file. (Useful for updating dicts.)
+    """
+    config_from_file = _rc_params_in_file(fname, fail_on_error)
+
+    if not use_default_template:
+        return config_from_file
+
+    iter_params = six.iteritems(defaultParams)
+    config = RcParams([(key, default) for key, (default, _) in iter_params])
+    config.update(config_from_file)
+
+    verbose.set_level(config['verbose.level'])
+    verbose.set_fileo(config['verbose.fileo'])
+
+    if config['datapath'] is None:
+        config['datapath'] = get_data_path()
+
+    if not config['text.latex.preamble'] == ['']:
         verbose.report("""
 *****************************************************************
 You have the following UNSUPPORTED LaTeX preamble customizations:
 %s
 Please do not ask for support with these customizations active.
 *****************************************************************
-"""% '\n'.join(ret['text.latex.preamble']), 'helpful')
+"""% '\n'.join(config['text.latex.preamble']), 'helpful')
 
     verbose.report('loaded rc file %s'%fname)
 
-    return ret
+    return config
 
 
 # this is the instance used by the matplotlib classes
@@ -1191,7 +1278,7 @@ def tk_window_focus():
 # Allow command line access to the backend with -d (MATLAB compatible
 # flag)
 
-for s in sys.argv[1:]:
+for s in map(six.u, sys.argv[1:]):
     if s.startswith('-d') and len(s) > 2:  # look for a -d flag
         try:
             use(s[2:])
@@ -1206,6 +1293,7 @@ default_test_modules = [
     'matplotlib.tests.test_axes',
     'matplotlib.tests.test_backend_pdf',
     'matplotlib.tests.test_backend_pgf',
+    'matplotlib.tests.test_backend_ps',
     'matplotlib.tests.test_backend_qt4',
     'matplotlib.tests.test_backend_svg',
     'matplotlib.tests.test_basic',
@@ -1235,6 +1323,7 @@ default_test_modules = [
     'matplotlib.tests.test_simplification',
     'matplotlib.tests.test_spines',
     'matplotlib.tests.test_streamplot',
+    'matplotlib.tests.test_style',
     'matplotlib.tests.test_subplots',
     'matplotlib.tests.test_table',
     'matplotlib.tests.test_text',

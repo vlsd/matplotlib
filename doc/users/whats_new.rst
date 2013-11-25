@@ -23,14 +23,50 @@ revision, see the :ref:`github-stats`.
 new in matplotlib-1.4
 =====================
 
+Documentation changes
+---------------------
+
+Phil Elson rewrote of the documentation and userguide for both Legend and PathEffects (links needed).
+
+
 New plotting features
 ---------------------
 
 Support for datetime axes in 2d plots
 `````````````````````````````````````
 Andrew Dawson added support for datetime axes to
-:func:`~matplotlib.pyplot.contour`, :func:`~matplotlib.pyplot.contourf`, 
-:func:`~matplotlib.pyplot.pcolormesh` and :func:`~matplotlib.pyplot.pcolor`. 
+:func:`~matplotlib.pyplot.contour`, :func:`~matplotlib.pyplot.contourf`,
+:func:`~matplotlib.pyplot.pcolormesh` and :func:`~matplotlib.pyplot.pcolor`.
+
+Support for additional spectrum types
+`````````````````````````````````````
+Todd Jennings added support for new types of frequency spectrum plots:
+:func:`~matplotlib.pyplot.magnitude_spectrum`,
+:func:`~matplotlib.pyplot.phase_spectrum`, and
+:func:`~matplotlib.pyplot.angle_spectrum`, as well as corresponding functions
+in mlab.
+
+He also added these spectrum types to :func:`~matplotlib.pyplot.specgram`,
+as well as adding support for linear scaling there (in addition to the
+existing dB scaling). Support for additional spectrum types was also added to
+:func:`~matplotlib.mlab.specgram`.
+
+He also increased the performance for all of these functions and plot types.
+
+Support for detrending and windowing 2D arrays in mlab
+``````````````````````````````````````````````````````
+Todd Jennings added support for 2D arrays in the 
+:func:`~matplotlib.mlab.detrend_mean`, :func:`~matplotlib.mlab.detrend_none`,
+and :func:`~matplotlib.mlab.detrend`, as well as adding 
+:func:`~matplotlib.mlab.apply_window` which support windowing 2D arrays.
+
+Support for strides in mlab
+```````````````````````````
+Todd Jennings added some functions to mlab to make it easier to use numpy
+strides to create memory-efficient 2D arrays.  This includes
+:func:`~matplotlib.mlab.stride_repeat`, which repeats an array to create a 2D
+array, and :func:`~matplotlib.mlab.stride_windows`, which uses a moving window
+to create a 2D array from a 1D array.
 
 
 Date handling
@@ -44,14 +80,43 @@ and :func:`matplotlib.dates.datestr2num`. Support is also added to the unit
 conversion interfaces :class:`matplotlib.dates.DateConverter` and
 :class:`matplotlib.units.Registry`.
 
+
 Configuration (rcParams)
 ------------------------
- 
+
 ``savefig.transparent`` added
 `````````````````````````````
-Controls whether figures are saved with a transparent 
+Controls whether figures are saved with a transparent
 background by default.  Previously `savefig` always defaulted
 to a non-transparent background.
+
+``axes.formatter.useoffset`` added
+``````````````````````````````````
+Controls the default value of `useOffset` in `ScalarFormatter`.  If
+`True` and the data range is much smaller than the data average, then
+an offset will be determined such that the tick labels are
+meaningful. If `False` then the full number will be formatted in all
+conditions.
+
+``style`` package added
+```````````````````````
+You can now easily switch between different styles using the new ``style``
+package::
+
+   >>> from matplotlib import style
+   >>> style.use('dark_background')
+
+Subsequent plots will use updated colors, sizes, etc. To list all available
+styles, use::
+
+   >>> print style.available
+
+You can add your own custom ``<style name>.mplstyle`` files to
+``~/.matplotlib/stylelib`` or call ``use`` with a URL pointing to a file with
+``matplotlibrc`` settings.
+
+*Note that this is an experimental feature*, and the interface may change as
+users test out this new feature.
 
 .. _whats-new-1-3:
 
@@ -73,7 +138,7 @@ Enhancements
 - Added a context manager for creating multi-page pdfs (see
   `matplotlib.backends.backend_pdf.PdfPages`).
 
-- The WebAgg backend should no have lower latency over heterogeneous
+- The WebAgg backend should now have lower latency over heterogeneous
   Internet connections.
 
 Bug fixes

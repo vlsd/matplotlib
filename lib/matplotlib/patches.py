@@ -30,6 +30,7 @@ docstring.interpd.update(Patch="""
           alpha               float
           animated            [True | False]
           antialiased or aa   [True | False]
+          capstyle            ['butt' | 'round' | 'projecting']
           clip_box            a matplotlib.transform.Bbox instance
           clip_on             [True | False]
           edgecolor or ec     any matplotlib color
@@ -37,6 +38,7 @@ docstring.interpd.update(Patch="""
           figure              a matplotlib.figure.Figure instance
           fill                [True | False]
           hatch               unknown
+          joinstyle           ['miter' | 'round' | 'bevel']
           label               any string
           linewidth or lw     float
           lod                 [True | False]
@@ -56,6 +58,8 @@ class Patch(artist.Artist):
     are *None*, they default to their rc params setting.
     """
     zorder = 1
+    validCap = ('butt', 'round', 'projecting')
+    validJoin = ('miter', 'round', 'bevel')
 
     def __str__(self):
         return str(self.__class__).split('.')[-1]
@@ -69,6 +73,8 @@ class Patch(artist.Artist):
                  antialiased=None,
                  hatch=None,
                  fill=True,
+                 capstyle=None,
+                 joinstyle=None,
                  **kwargs):
         """
         The following kwarg properties are supported
@@ -81,6 +87,10 @@ class Patch(artist.Artist):
             linewidth = mpl.rcParams['patch.linewidth']
         if linestyle is None:
             linestyle = "solid"
+        if capstyle is None:
+            capstyle = 'butt'
+        if joinstyle is None:
+            joinstyle = 'miter'
         if antialiased is None:
             antialiased = mpl.rcParams['patch.antialiased']
 
@@ -100,6 +110,8 @@ class Patch(artist.Artist):
         self.set_antialiased(antialiased)
         self.set_hatch(hatch)
         self.set_fill(fill)
+        self.set_capstyle(capstyle)
+        self.set_joinstyle(joinstyle)
         self._combined_transform = transforms.IdentityTransform()
 
         if len(kwargs):
@@ -355,6 +367,38 @@ class Patch(artist.Artist):
     # attribute.
     fill = property(get_fill, set_fill)
 
+    def set_capstyle(self, s):
+        """
+        Set the patch capstyle
+
+        ACCEPTS: ['butt' | 'round' | 'projecting']
+        """
+        s = s.lower()
+        if s not in self.validCap:
+            raise ValueError('set_capstyle passed "%s";\n' % (s,)
+                             + 'valid capstyles are %s' % (self.validCap,))
+        self._capstyle = s
+
+    def get_capstyle(self):
+        "Return the current capstyle"
+        return self._capstyle
+
+    def set_joinstyle(self, s):
+        """
+        Set the patch joinstyle
+
+        ACCEPTS: ['miter' | 'round' | 'bevel']
+        """
+        s = s.lower()
+        if s not in self.validJoin:
+            raise ValueError('set_joinstyle passed "%s";\n' % (s,)
+                             + 'valid joinstyles are %s' % (self.validJoin,))
+        self._joinstyle = s
+
+    def get_joinstyle(self):
+        "Return the current joinstyle"
+        return self._joinstyle
+
     def set_hatch(self, hatch):
         """
         Set the hatching pattern
@@ -403,6 +447,8 @@ class Patch(artist.Artist):
             lw = 0
         gc.set_linewidth(lw)
         gc.set_linestyle(self._linestyle)
+        gc.set_capstyle(self._capstyle)
+        gc.set_joinstyle(self._joinstyle)
 
         gc.set_antialiased(self._antialiased)
         self._set_gc_clip(gc)
@@ -427,11 +473,10 @@ class Patch(artist.Artist):
         affine = transform.get_affine()
 
         if self.get_path_effects():
-            if gc.get_linewidth() or rgbFace is not None:
-                for path_effect in self.get_path_effects():
-                    path_effect.draw_path(renderer, gc, tpath, affine, rgbFace)
-        else:
-            renderer.draw_path(gc, tpath, affine, rgbFace)
+            from matplotlib.patheffects import PathEffectRenderer
+            renderer = PathEffectRenderer(self.get_path_effects(), renderer)
+
+        renderer.draw_path(gc, tpath, affine, rgbFace)
 
         gc.restore()
         renderer.close_group('patch')
@@ -1818,45 +1863,53 @@ class BoxStyle(_Style):
             super(BoxStyle.Square, self).__init__()
 
         def transmute(self, x0, y0, width, height, mutation_size):
-
-            # padding
             pad = mutation_size * self.pad
 
             # width and height with padding added.
-            width, height = width + 2. * pad, \
-                            height + 2. * pad,
+            width, height = width + 2*pad, height + 2*pad
 
             # boundary of the padded box
             x0, y0 = x0 - pad, y0 - pad,
             x1, y1 = x0 + width, y0 + height
 
-            cp = [(x0, y0), (x1, y0), (x1, y1), (x0, y1),
-                  (x0, y0), (x0, y0)]
-
-            com = [Path.MOVETO,
-                   Path.LINETO,
-                   Path.LINETO,
-                   Path.LINETO,
-                   Path.LINETO,
-                   Path.CLOSEPOLY]
-
-            path = Path(cp, com)
-
-            return path
+            vertices = [(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)]
+            codes = [Path.MOVETO] + [Path.LINETO] * 3 + [Path.CLOSEPOLY]
+            return Path(vertices, codes)
 
     _style_list["square"] = Square
+
+    class Circle(_Base):
+        """A simple circle box."""
+        def __init__(self, pad=0.3):
+            """
+            Parameters
+            ----------
+            pad : float
+                The amount of padding around the original box.
+            """
+            self.pad = pad
+            super(BoxStyle.Circle, self).__init__()
+
+        def transmute(self, x0, y0, width, height, mutation_size):
+            pad = mutation_size * self.pad
+            width, height = width + 2 * pad, height + 2 * pad
+
+            # boundary of the padded box
+            x0, y0 = x0 - pad, y0 - pad,
+            return Path.circle((x0 + width/2., y0 + height/2.),
+                               (max([width, height]) / 2.))
+
+    _style_list["circle"] = Circle
 
     class LArrow(_Base):
         """
         (left) Arrow Box
         """
-
         def __init__(self, pad=0.3):
             self.pad = pad
             super(BoxStyle.LArrow, self).__init__()
 
         def transmute(self, x0, y0, width, height, mutation_size):
-
             # padding
             pad = mutation_size * self.pad
 
@@ -2130,16 +2183,13 @@ class BoxStyle(_Style):
 
             saw_vertices = self._get_sawtooth_vertices(x0, y0, width,
                                                        height, mutation_size)
-            path = Path(saw_vertices)
+            path = Path(saw_vertices, closed=True)
             return path
 
     _style_list["sawtooth"] = Sawtooth
 
     class Roundtooth(Sawtooth):
-        """
-        A roundtooth(?) box.
-        """
-
+        """A rounded tooth box."""
         def __init__(self, pad=0.3, tooth_size=None):
             """
             *pad*
@@ -2151,16 +2201,17 @@ class BoxStyle(_Style):
             super(BoxStyle.Roundtooth, self).__init__(pad, tooth_size)
 
         def transmute(self, x0, y0, width, height, mutation_size):
-
             saw_vertices = self._get_sawtooth_vertices(x0, y0,
                                                        width, height,
                                                        mutation_size)
-
-            cp = [Path.MOVETO] + ([Path.CURVE3, Path.CURVE3]
-                                  * ((len(saw_vertices) - 1) // 2))
-            path = Path(saw_vertices, cp)
-
-            return path
+            # Add a trailing vertex to allow us to close the polygon correctly
+            saw_vertices = np.concatenate([np.array(saw_vertices),
+                                           [saw_vertices[0]]], axis=0)
+            codes = ([Path.MOVETO] +
+                 [Path.CURVE3, Path.CURVE3] * ((len(saw_vertices)-1) // 2) +
+                 [Path.CLOSEPOLY])
+            print(len(codes), saw_vertices.shape)
+            return Path(saw_vertices, codes)
 
     _style_list["roundtooth"] = Roundtooth
 
@@ -4020,18 +4071,14 @@ class FancyArrowPatch(Patch):
         affine = transforms.IdentityTransform()
 
         if self.get_path_effects():
-            for path_effect in self.get_path_effects():
-                for p, f in zip(path, fillable):
-                    if f:
-                        path_effect.draw_path(renderer, gc, p, affine, rgbFace)
-                    else:
-                        path_effect.draw_path(renderer, gc, p, affine, None)
-        else:
-            for p, f in zip(path, fillable):
-                if f:
-                    renderer.draw_path(gc, p, affine, rgbFace)
-                else:
-                    renderer.draw_path(gc, p, affine, None)
+            from matplotlib.patheffects import PathEffectRenderer
+            renderer = PathEffectRenderer(self.get_path_effects(), renderer)
+
+        for p, f in zip(path, fillable):
+            if f:
+                renderer.draw_path(gc, p, affine, rgbFace)
+            else:
+                renderer.draw_path(gc, p, affine, None)
 
         gc.restore()
         renderer.close_group('patch')

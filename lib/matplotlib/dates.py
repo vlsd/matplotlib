@@ -495,7 +495,7 @@ class AutoDateFormatter(ticker.Formatter):
            365.0  : '%Y',
            30.    : '%b %Y',
            1.0    : '%b %d %Y',
-           1./24. : '%H:%M:%D',
+           1./24. : '%H:%M:%S',
            1. / (24. * 60.): '%H:%M:%S.%f',
            }
 
@@ -820,8 +820,8 @@ class AutoDateLocator(DateLocator):
                             5000, 10000, 20000, 50000, 100000, 200000, 500000,
                             1000000]}
         self._byranges = [None, list(xrange(1, 13)), list(xrange(1, 32)),
-                          list(xrange(0, 24)), list(xrange(0, 60)), list(xrange(0, 60)),
-                          None]
+                          list(xrange(0, 24)), list(xrange(0, 60)),
+                          list(xrange(0, 60)), None]
 
     def __call__(self):
         'Return the locations of the ticks'
