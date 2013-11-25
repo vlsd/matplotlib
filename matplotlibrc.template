@@ -379,11 +379,19 @@ backend      : %(backend)s
 #savefig.facecolor   : white    # figure facecolor when saving
 #savefig.edgecolor   : white    # figure edgecolor when saving
 #savefig.format      : png      # png, ps, pdf, svg
+<<<<<<< HEAD
 #savefig.bbox        : standard # 'tight' or 'standard'.
                                 # 'tight' is incompatible with pipe-based animation
                                 # backends but will workd with temporary file based ones:
                                 # e.g. setting animation.writer to ffmpeg will not work,
                                 # use ffmpeg_file instead
+=======
+#savefig.bbox        : standard # 'tight' or 'standard'
+                                # 'tight' is incompatible with pipe-based animation 
+                                # backends but will work with temporary file based ones:
+                                # e.g. setting animation.writer to ffmpeg will not work,
+                                # use ffmpeg_file instead 
+>>>>>>> ba527525d9982dadcdc776f04a7e63c8a05c09ce
 #savefig.pad_inches  : 0.1      # Padding to be used when bbox is set to 'tight'
 #savefig.jpeg_quality: 95       # when a jpeg is saved, the default quality parameter.
 #savefig.directory   : ~        # default directory in savefig dialog box,

@@ -401,7 +401,11 @@ class FFMpegFileWriter(FileMovieWriter, FFMpegBase):
         # ffmpeg to create a movie using a collection of temp images
         return [self.bin_path(), '-i', self._base_temp_name(),
                 '-vframes', str(self._frame_counter),
+<<<<<<< HEAD
                 '-r', str(self.fps), ] + self.output_args
+=======
+                '-r', str(self.fps)] + self.output_args
+>>>>>>> ba527525d9982dadcdc776f04a7e63c8a05c09ce
 
 
 # Base class of avconv information.  AVConv has identical arguments to
